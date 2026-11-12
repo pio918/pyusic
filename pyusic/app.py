@@ -9,6 +9,7 @@ import sys
 import tomllib
 from pathlib import Path
 
+import numpy as np
 from PIL import Image as PILImage, ImageDraw
 from rich.table import Table
 from rich.text import Text
@@ -165,29 +166,36 @@ class Visualizer(Static):
 
     def __init__(self, **kw) -> None:
         super().__init__(**kw)
-        self.analyzer: viz.Analyzer | None = None
-        self.mode, self.scheme, self.gain = "bars", "theme", 1.0
         self._lines: list[Text] = []
         self._quiet = 0
 
-    def advance(self) -> bool:
+    def clear(self) -> None:
+        self._lines, self._quiet = [], 0
+        self.refresh()
+
+    def advance(self, a: viz.Analyzer, mode: str, scheme: str, gain: float, beat: float) -> bool:
         """Compute the next frame. Returns False when nothing changed (silence), to save redraws."""
-        a, (w, h), m = self.analyzer, self.size, self.mode
-        if a is None or w < 6 or h < 1 or m == "off":
+        w, h = self.size
+        if w < 6 or h < 1 or mode == "off":
             return False
-        if m in ("bars", "mirror"):
-            bars, peaks = a.update_spectrum(max(4, (w + 1) // 3), self.gain)
-            draw = viz.draw_bars if m == "bars" else viz.draw_mirror
-            lines, energy = draw(bars, peaks, w, h, self.scheme, P), float(peaks.max())
-        elif m == "thin":
-            bars, peaks = a.update_spectrum(w * 2, self.gain)
-            lines, energy = viz.draw_thin(bars, peaks, w, h, self.scheme, P), float(peaks.max())
-        elif m == "wave":
-            s = a.wave(w * 2, self.gain)
-            lines, energy = viz.draw_wave(s, w, h, self.scheme, P), float(abs(s).max())
+        viz.set_flash(beat)
+        if mode in ("bars", "mirror"):
+            bars, peaks = a.update_spectrum(max(4, (w + 1) // 3), gain)
+            if beat:  # the kick punches the bass end of the spectrum up
+                bars = np.clip(bars + beat * 0.2 * np.clip(1 - np.arange(len(bars)) / (0.3 * len(bars)), 0, 1), 0, 1)
+            draw = viz.draw_bars if mode == "bars" else viz.draw_mirror
+            lines, energy = draw(bars, peaks, w, h, scheme, P), float(peaks.max())
+        elif mode == "thin":
+            bars, peaks = a.update_spectrum(w * 2, gain)
+            if beat:
+                bars = np.clip(bars + beat * 0.2 * np.clip(1 - np.arange(len(bars)) / (0.3 * len(bars)), 0, 1), 0, 1)
+            lines, energy = viz.draw_thin(bars, peaks, w, h, scheme, P), float(peaks.max())
+        elif mode == "wave":
+            s = a.wave(w * 2, gain)
+            lines, energy = viz.draw_wave(s, w, h, scheme, P), float(abs(s).max())
         else:  # vu
-            lv = a.update_vu(self.gain)
-            lines, energy = viz.draw_vu(lv, w, h, self.scheme, P), max(lv[2], lv[3])
+            lv = a.update_vu(gain)
+            lines, energy = viz.draw_vu(lv, w, h, scheme, P), max(lv[2], lv[3])
         self._quiet = self._quiet + 1 if energy < 0.02 else 0
         if self._quiet > 3:        # silent for a few frames: the last frame is already empty
             return False
@@ -298,6 +306,7 @@ HELP = """\
   + -          volume      m  mute
   s  r         shuffle / repeat (off → all → one)
   v  c         visualizer: next style / next colors     [ ]  sensitivity
+  w            visualizer full width / in the player panel     b  beat effect on/off
 
 [b]Library[/b]
   a            add a YouTube playlist URL, or a local music folder
@@ -363,8 +372,11 @@ Slider { height: 1; width: 100%; }
 #toggles .chip { color: $yp-dim; }
 #toggles .chip.-on { color: $yp-accent; background: $yp-sel; text-style: bold; }
 #volume { margin-top: 1; }
-#viz { height: 7; width: 100%; margin-top: 1; }
-#viz.-off { display: none; }
+.vizbox { border: round $yp-muted; background: $yp-panel; border-title-color: $yp-dim; padding: 0 1; }
+#vizbox { height: 10; width: 100%; margin-top: 1; }
+#vizwidebox { height: 11; margin: 0 1; }
+.vizbox.-off { display: none; }
+Visualizer { width: 100%; height: 1fr; }
 Footer { background: $yp-bg; }
 Footer .footer-key--key { color: $yp-accent; background: $yp-bg; }
 Footer .footer-key--description { color: $yp-dim; background: $yp-bg; }
@@ -397,6 +409,8 @@ class Pyusic(App):
         Binding("r", "repeat", "Repeat"),
         Binding("v", "viz_mode", "Visualizer"),
         Binding("c", "viz_color", show=False),
+        Binding("w", "viz_place", "Wide viz", show=False),
+        Binding("b", "viz_beat", show=False),
         Binding("left_square_bracket", "viz_gain(-0.1)", show=False),
         Binding("right_square_bracket", "viz_gain(0.1)", show=False),
         Binding("a", "add", "Add playlist"),
@@ -439,6 +453,7 @@ class Pyusic(App):
         self.register_theme(self.make_theme(name))
         self.theme = name
         self.refresh_css()
+        self._pulse_level = None
         # re-render everything that bakes colours into Rich text
         ol = self.query_one("#tracks", OptionList)
         for i in range(len(self.view)):
@@ -477,6 +492,16 @@ class Pyusic(App):
         self._shown_sec = -1
         self.art_src = None
         self.analyzer: viz.Analyzer | None = None
+        st = self.store.settings
+        self.viz_mode = st.get("viz_mode") if st.get("viz_mode") in viz.MODES else "bars"
+        self.viz_scheme = st.get("viz_color") if st.get("viz_color") in viz.COLORS else "theme"
+        self.viz_gain = float(st.get("viz_gain", 1.0))
+        self.viz_place = st.get("viz_place") if st.get("viz_place") in ("panel", "wide") else "panel"
+        self.viz_beat = bool(st.get("viz_beat", True))
+        self.beat = 0.0
+        self._viz_idle = 0
+        self._viz_frame = 0
+        self._pulse_level: float | None = None
         self.errors_in_a_row = 0
         self.cover_rev = 0
         self.control = Control(self.remote_command)
@@ -509,7 +534,10 @@ class Pyusic(App):
                     yield Ctl("shuffle", "shuffle", id="shuffle", classes="chip")
                     yield Ctl("repeat", "repeat", id="repeat", classes="chip")
                 yield Slider(id="volume")
-                yield Visualizer(id="viz")
+                with Vertical(id="vizbox", classes="vizbox"):
+                    yield Visualizer(id="viz")
+        with Vertical(id="vizwidebox", classes="vizbox"):
+            yield Visualizer(id="vizwide")
         yield Footer()
 
     async def on_mount(self) -> None:
@@ -524,11 +552,8 @@ class Pyusic(App):
         self.query_one("#sidebar").border_title = "playlists"
         self.query_one("#now").border_title = "now playing"
         self.query_one("#art").styles.visibility = "visible"
-        vz = self.query_one("#viz", Visualizer)
-        vz.mode = self.store.settings.get("viz_mode", "bars") if self.store.settings.get("viz_mode") in viz.MODES else "bars"
-        vz.scheme = self.store.settings.get("viz_color", "theme") if self.store.settings.get("viz_color") in viz.COLORS else "theme"
-        vz.gain = float(self.store.settings.get("viz_gain", 1.0))
-        vz.set_class(vz.mode == "off", "-off")
+        self.query_one("#vizwidebox").border_title = "visualizer"
+        self.apply_viz_layout()
         self.offline = offline_index()
         await self.start_visualizer()
         try:
@@ -564,7 +589,7 @@ class Pyusic(App):
     def fit_art(self) -> None:
         """Largest square (in pixels, whatever the font's cell shape) that fits the panel."""
         now = self.query_one("#now")
-        viz_rows = 0 if self.query_one("#viz").has_class("-off") else 8
+        viz_rows = 0 if self.query_one("#vizbox").has_class("-off") else 11
         w, avail = now.content_size.width, now.content_size.height - 13 - viz_rows
         if w < 6:
             return
@@ -948,6 +973,8 @@ class Pyusic(App):
         self.update_now_ui()
         self.refresh_rows()
         self.run_worker(self.load_art(track), exclusive=False)
+        if self.analyzer:
+            self.analyzer.kick()
         local = self.offline.get(track.id)
         await self.player.play(str(local) if local and local.exists() else track.url)
 
@@ -1079,41 +1106,82 @@ class Pyusic(App):
         if not await self.analyzer.start():
             self.notify(f"Visualizer unavailable: {self.analyzer.error}", severity="warning", timeout=8)
             self.analyzer = None
-        self.query_one("#viz", Visualizer).analyzer = self.analyzer
+        self._vz_panel = self.query_one("#viz", Visualizer)
+        self._vz_wide = self.query_one("#vizwide", Visualizer)
+        self._box_panel, self._box_wide = self.query_one("#vizbox"), self.query_one("#vizwidebox")
         self.set_interval(1 / 25, self.viz_tick)
 
+    def active_viz(self) -> Visualizer:
+        return self._vz_wide if self.viz_place == "wide" else self._vz_panel
+
+    def apply_viz_layout(self) -> None:
+        """Show the visualizer where the user wants it (in the player panel, or full width)."""
+        off = self.viz_mode == "off"
+        self.query_one("#vizbox").set_class(off or self.viz_place == "wide", "-off")
+        self.query_one("#vizwidebox").set_class(off or self.viz_place == "panel", "-off")
+        self.call_after_refresh(self.fit_art)
+
     def viz_tick(self) -> None:
-        if self.analyzer is None:
+        a = self.analyzer
+        if a is None:
             return
-        self.analyzer.want_link = self.current is not None
-        vz = self.query_one("#viz", Visualizer)
-        if vz.advance():
+        playing = self.current is not None and not self.paused
+        self._viz_idle = 0 if playing else self._viz_idle + 1
+        # Capture and analysis only while there is something to show: music playing (or the bars still falling).
+        active = self.viz_mode != "off" and self.current is not None and (playing or self._viz_idle <= 50)
+        a.want_link = self.current is not None
+        a.set_wanted(active)
+        if not active:
+            return
+        self._viz_frame += 1
+        if self.viz_place == "wide" and self._viz_frame % 5 == 4:   # a wide display is heavy to repaint: 20 fps is plenty
+            return
+        self.beat = a.update_beat() if self.viz_beat else 0.0
+        vz = self.active_viz()
+        if vz.advance(a, self.viz_mode, self.viz_scheme, self.viz_gain, self.beat if self.viz_beat else 0.0):
             vz.refresh()
+        self._pulse_border()
+
+    def _pulse_border(self) -> None:
+        """The visualizer's own frame lights up on the beat (it never touches the cover's panel)."""
+        level = round(self.beat * 4) / 4 if self.viz_beat else 0.0
+        if level == self._pulse_level:
+            return
+        self._pulse_level = level
+        box = self._box_wide if self.viz_place == "wide" else self._box_panel
+        box.styles.border = ("round", viz._lerp(P["muted"], P["accent"], level))
 
     def _viz_apply(self, message: str) -> None:
-        vz = self.query_one("#viz", Visualizer)
-        vz.set_class(vz.mode == "off", "-off")
-        vz._quiet, vz._lines = 0, []
-        vz.refresh()
-        self.store.settings.update(viz_mode=vz.mode, viz_color=vz.scheme, viz_gain=round(vz.gain, 2))
+        for v in self.query(Visualizer):
+            v.clear()
+        self._pulse_level = None
+        self.apply_viz_layout()
+        self.store.settings.update(viz_mode=self.viz_mode, viz_color=self.viz_scheme, viz_gain=round(self.viz_gain, 2),
+                                   viz_place=self.viz_place, viz_beat=self.viz_beat)
         self.store.save()
-        self.call_after_refresh(self.fit_art)
         self.notify(message, timeout=1.5)
 
     def action_viz_mode(self) -> None:
-        vz = self.query_one("#viz", Visualizer)
-        vz.mode = viz.MODES[(viz.MODES.index(vz.mode) + 1) % len(viz.MODES)]
-        self._viz_apply(f"visualizer: {vz.mode}")
+        self.viz_mode = viz.MODES[(viz.MODES.index(self.viz_mode) + 1) % len(viz.MODES)]
+        self._viz_apply(f"visualizer: {self.viz_mode}")
 
     def action_viz_color(self) -> None:
-        vz = self.query_one("#viz", Visualizer)
-        vz.scheme = viz.COLORS[(viz.COLORS.index(vz.scheme) + 1) % len(viz.COLORS)]
-        self._viz_apply(f"colors: {vz.scheme}")
+        self.viz_scheme = viz.COLORS[(viz.COLORS.index(self.viz_scheme) + 1) % len(viz.COLORS)]
+        self._viz_apply(f"colors: {self.viz_scheme}")
 
     def action_viz_gain(self, delta: float) -> None:
-        vz = self.query_one("#viz", Visualizer)
-        vz.gain = max(0.3, min(3.0, vz.gain + delta))
-        self._viz_apply(f"sensitivity: {vz.gain:.1f}")
+        self.viz_gain = max(0.3, min(3.0, self.viz_gain + delta))
+        self._viz_apply(f"sensitivity: {self.viz_gain:.1f}")
+
+    def action_viz_place(self) -> None:
+        self.viz_place = "wide" if self.viz_place == "panel" else "panel"
+        if self.viz_mode == "off":
+            self.viz_mode = "bars"
+        self._viz_apply(f"visualizer: {'full width' if self.viz_place == 'wide' else 'in the player panel'}")
+
+    def action_viz_beat(self) -> None:
+        self.viz_beat = not self.viz_beat
+        self._viz_apply(f"beat effect: {'on' if self.viz_beat else 'off'}")
 
     # ----------------------------------------------------------------- desktop integration
 

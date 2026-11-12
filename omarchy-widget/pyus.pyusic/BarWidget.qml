@@ -151,19 +151,35 @@ BarWidget {
         font.pixelSize: Style.font.body
         anchors.verticalCenter: parent.verticalCenter
 
-        // Short titles sit still; long ones scroll inside the same fixed box.
-        property bool needsScroll: implicitWidth > scrollClip.width
-
-        NumberAnimation on x {
-          running: labelText.needsScroll && root.isPlaying && root.visible && !root.bar.barHidden && !Style.reduceMotion
-          onRunningChanged: if (!running) labelText.x = 0
-          loops: Animation.Infinite
-          duration: Style.duration(Math.max(6000, labelText.implicitWidth * 25))
-          from: scrollClip.width
-          to: -labelText.implicitWidth
-          easing.type: Easing.Linear
-        }
+        x: -root.scrollX
       }
+    }
+  }
+
+  // Title marquee. Short titles sit still. A long one waits, slides to show the rest, waits, and jumps back.
+  // It moves in steps (~15 per second) rather than as a smooth animation: the bar repaints on every step, and at
+  // the monitor's refresh rate (144 Hz here) a continuous animation cost several percent of a CPU core.
+  property real scrollX: 0
+  property bool atEnd: false
+  readonly property real overflow: Math.max(0, labelText.implicitWidth - scrollClip.width)
+  readonly property bool marquee: overflow > 0 && isPlaying && visible && !(bar && bar.barHidden) && !Style.reduceMotion
+
+  function stopMarquee() { slide.stop(); hold.stop(); scrollX = 0; atEnd = false }
+  function beginHold(end) { slide.stop(); atEnd = end; hold.interval = end ? 1800 : 2200; hold.restart() }
+  onMarqueeChanged: { if (marquee) beginHold(false); else stopMarquee() }
+  onOverflowChanged: { if (marquee) { stopMarquee(); beginHold(false) } }
+
+  Timer {
+    id: hold
+    onTriggered: { if (root.atEnd) { root.scrollX = 0; root.beginHold(false) } else slide.start() }
+  }
+  Timer {
+    id: slide
+    interval: 66
+    repeat: true
+    onTriggered: {
+      root.scrollX = Math.min(root.overflow, root.scrollX + 2)
+      if (root.scrollX >= root.overflow) root.beginHold(true)
     }
   }
 

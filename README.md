@@ -34,6 +34,8 @@ pyusic
 | `+` `-` `m` | volume / mute |
 | `s` `r` | shuffle / repeat (off → all → one) |
 | `v` `c` | visualizer: next style / next colour scheme |
+| `w` | visualizer: full width ↔ inside the player panel |
+| `b` | beat effect on/off |
 | `[` `]` | visualizer sensitivity |
 | `a` | add a playlist URL or a local folder |
 | `g` | search YouTube |
@@ -48,11 +50,17 @@ pyusic
 
 Styles (`v`): `bars` (with falling peak caps), `thin` (braille, one dot per bar), `mirror`, `wave` (oscilloscope), `vu` (stereo meters), `off`.
 Colours (`c`): `theme` (follows your Omarchy accent), `rainbow`, `fire`, `ice`, `mono`. `[` / `]` change the sensitivity.
+`w` moves the visualizer between the player panel and a full-width band under the whole window.
 Your choices are saved.
+
+Beat effect (`b`): a kick detector watches the bass (40-170 Hz). On each kick the bars flash towards white, the bass end
+punches up, and the visualizer's frame lights up. The cover is deliberately left alone: redrawing a sixel image on every
+beat would be expensive.
 
 How it works: pyusic opens a PipeWire capture stream and links only mpv's output to it, so it sees pyusic's audio and nothing else
 (the sound still goes to your speakers). Each frame it runs an FFT on the last 2048 samples, groups the result into log-spaced
 frequency bands (bass on the left, treble on the right) and draws one bar per band. An automatic gain keeps it readable at any volume.
+The capture stream is only open while the visualizer is on and music is playing, so it costs nothing otherwise.
 
 ## Data
 
