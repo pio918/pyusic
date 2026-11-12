@@ -1,0 +1,4 @@
+#!/bin/sh
+# Launcher: works from any directory and through symlinks (e.g. ~/.local/bin/ytplay).
+D="$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)"
+PYTHONPATH="$D" exec "$D/.venv/bin/python" -m ytplay "$@"

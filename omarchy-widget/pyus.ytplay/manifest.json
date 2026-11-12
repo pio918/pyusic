@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "id": "pyus.ytplay",
+  "name": "ytplay",
+  "version": "1.0.0",
+  "author": "pyus",
+  "description": "Now playing from the ytplay terminal player, with controls",
+  "kinds": [
+    "bar-widget"
+  ],
+  "entryPoints": {
+    "barWidget": "BarWidget.qml"
+  },
+  "barWidget": {
+    "displayName": "ytplay",
+    "description": "Now playing from ytplay: cover, title, progress and controls",
+    "category": "Media",
+    "defaultSection": "centerBegin",
+    "allowMultiple": false
+  }
+}
