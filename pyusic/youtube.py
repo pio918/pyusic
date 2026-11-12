@@ -14,8 +14,8 @@ from pathlib import Path
 
 from PIL import Image, ImageChops
 
-CONFIG_DIR = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")) / "ytplay"
-CACHE_DIR = Path(os.environ.get("XDG_CACHE_HOME", Path.home() / ".cache")) / "ytplay"
+CONFIG_DIR = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")) / "pyusic"
+CACHE_DIR = Path(os.environ.get("XDG_CACHE_HOME", Path.home() / ".cache")) / "pyusic"
 
 
 _EMOJI = re.compile(
@@ -115,7 +115,7 @@ async def search(query: str, n: int = 30) -> list[Track]:
 # --------------------------------------------------------------------------- local files
 
 AUDIO_EXT = {".m4a", ".mp3", ".opus", ".ogg", ".oga", ".flac", ".wav", ".aac", ".wma", ".mka", ".webm"}
-MUSIC_ROOT = Path(os.environ.get("XDG_MUSIC_DIR") or Path.home() / "Music") / "ytplay"
+MUSIC_ROOT = Path(os.environ.get("XDG_MUSIC_DIR") or Path.home() / "Music") / "pyusic"
 _ID_RE = re.compile(r"\[([A-Za-z0-9_-]{11})\]\.[A-Za-z0-9]+$")
 
 

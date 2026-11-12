@@ -1,4 +1,4 @@
-# ytplay
+# pyusic
 
 A friendly terminal music player for YouTube playlists, with real cover art.
 
@@ -17,9 +17,9 @@ Tested on Arch/Omarchy with the `foot` terminal (sixel).
 Requires `python3`, `mpv`, `yt-dlp`, `ffmpeg` (and `socat` for the bar widget's fallback path).
 
 ```sh
-git clone <this repo> && cd ytplay
-./install.sh        # venv + ~/.local/bin/ytplay
-ytplay
+git clone <this repo> && cd pyusic
+./install.sh        # venv + ~/.local/bin/pyusic
+pyusic
 ```
 
 ## Keys
@@ -38,20 +38,20 @@ ytplay
 | `u` `d` | refresh / remove the highlighted playlist |
 | `?` | help |
 
-`ytplay <playlist-url>` adds and opens a playlist straight away.
+`pyusic <playlist-url>` adds and opens a playlist straight away.
 
 ## Data
 
-- Library: `~/.config/ytplay/library.json`
-- Cache: `~/.cache/ytplay/`
-- Downloads: `~/Music/ytplay/<playlist>/` (`$XDG_MUSIC_DIR` is respected)
+- Library: `~/.config/pyusic/library.json`
+- Cache: `~/.cache/pyusic/`
+- Downloads: `~/Music/pyusic/<playlist>/` (`$XDG_MUSIC_DIR` is respected)
 
 ## Remote control
 
-While running, ytplay serves a control socket and a status file under `$XDG_RUNTIME_DIR/ytplay/`.
+While running, pyusic serves a control socket and a status file under `$XDG_RUNTIME_DIR/pyusic/`.
 
 ```sh
-ytplay ctl toggle | next | prev | prevtrack | seek 10 | seekto 90 | volume -5 | volumeto 40 | shuffle | repeat | mute
+pyusic ctl toggle | next | prev | prevtrack | seek 10 | seekto 90 | volume -5 | volumeto 40 | shuffle | repeat | mute
 ```
 
 Handy for keybindings and bar widgets. `status.json` holds title, artist, position, volume, etc.
@@ -63,5 +63,5 @@ Handy for keybindings and bar widgets. `status.json` holds title, artist, positi
 ```
 
 Fixed-width now-playing item next to the clock: cover, title, progress line.
-Left click opens a player popup, middle click toggles play/pause, right click opens ytplay, the wheel changes track.
-Remove with `omarchy plugin disable pyus.ytplay`.
+Left click opens a player popup, middle click toggles play/pause, right click opens pyusic, the wheel changes track.
+Remove with `omarchy plugin disable pyus.pyusic`.

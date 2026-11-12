@@ -1,5 +1,5 @@
 #!/bin/sh
-# Sets up a virtualenv and links `ytplay` into ~/.local/bin.
+# Sets up a virtualenv and links `pyusic` into ~/.local/bin.
 set -e
 cd "$(dirname "$(readlink -f "$0")")"
 for tool in python3 mpv yt-dlp ffmpeg; do
@@ -8,5 +8,5 @@ done
 python3 -m venv .venv
 .venv/bin/pip install -q -r requirements.txt
 mkdir -p "$HOME/.local/bin"
-ln -sf "$PWD/bin/ytplay" "$HOME/.local/bin/ytplay"
-echo "done: run 'ytplay'  (make sure ~/.local/bin is in your PATH)"
+ln -sf "$PWD/bin/pyusic" "$HOME/.local/bin/pyusic"
+echo "done: run 'pyusic'  (make sure ~/.local/bin is in your PATH)"

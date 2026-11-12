@@ -1,4 +1,4 @@
-"""ytplay — a friendly YouTube-playlist music player for the terminal."""
+"""pyusic — a friendly YouTube-playlist music player for the terminal."""
 from __future__ import annotations
 
 import asyncio
@@ -267,7 +267,7 @@ HELP = """\
   enter        open playlist / play track
 
 You can also click the progress bar, volume bar and buttons.
-Start with a URL:  [b]ytplay <playlist-url>[/b]
+Start with a URL:  [b]pyusic <playlist-url>[/b]
 """
 
 
@@ -276,7 +276,7 @@ class Help(ModalScreen[None]):
 
     def compose(self) -> ComposeResult:
         with Vertical(id="dialog"):
-            yield Label("ytplay — keys", id="dlg-title")
+            yield Label("pyusic — keys", id="dlg-title")
             yield Static(HELP)
             yield Label("esc to close", id="dlg-hint")
 
@@ -333,10 +333,10 @@ Input:focus { border: tall $yp-accent; }
 """
 
 
-class YTPlay(App):
+class Pyusic(App):
     ALLOW_SELECT = False  # it's a player, not a document: clicks must never select text
     CSS = CSS
-    TITLE = "ytplay"
+    TITLE = "pyusic"
     BINDINGS = [
         Binding("space", "toggle", "Play/Pause"),
         Binding("n", "next", "Next"),
@@ -440,7 +440,7 @@ class YTPlay(App):
     def compose(self) -> ComposeResult:
         with Horizontal(id="body"):
             with Vertical(id="sidebar", classes="panel"):
-                yield Static("ytplay", id="logo")
+                yield Static("pyusic", id="logo")
                 yield OptionList(id="playlists")
             with Vertical(id="library", classes="panel"):
                 yield FilterInput(placeholder="filter tracks…", id="filter")
@@ -560,7 +560,7 @@ class YTPlay(App):
             tracks.display = True
             return
         empty.update(text or (
-            "[b]Welcome to ytplay[/b]\n\nNo playlists yet.\n\n"
+            "[b]Welcome to pyusic[/b]\n\nNo playlists yet.\n\n"
             "Press [b]a[/b] and paste a YouTube playlist URL,\n"
             "or press [b]g[/b] to search YouTube."))
         empty.display = True
@@ -1095,10 +1095,10 @@ def main() -> None:
         sys.exit(ctl_send(sys.argv[2:]))
     url = sys.argv[1] if len(sys.argv) > 1 else None
     if url in ("-h", "--help"):
-        print("usage: ytplay [playlist-url]\n       ytplay ctl <toggle|next|prev|seek N|volume N|shuffle|repeat|mute>\n\n"
+        print("usage: pyusic [playlist-url]\n       pyusic ctl <toggle|next|prev|seek N|volume N|shuffle|repeat|mute>\n\n"
               "A YouTube playlist music player. Press ? inside for keys.")
         return
-    YTPlay(url).run()
+    Pyusic(url).run()
 
 
 if __name__ == "__main__":

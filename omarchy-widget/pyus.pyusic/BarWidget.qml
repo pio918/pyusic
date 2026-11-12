@@ -5,25 +5,25 @@ import qs.Ui
 import qs.Commons
 import qs.Commons as Commons
 
-// Now-playing widget for ytplay.
-// ytplay publishes its state to $XDG_RUNTIME_DIR/ytplay/status.json and takes
-// commands on $XDG_RUNTIME_DIR/ytplay/control.sock. The widget hides itself
-// when ytplay is not running or nothing is loaded.
+// Now-playing widget for pyusic.
+// pyusic publishes its state to $XDG_RUNTIME_DIR/pyusic/status.json and takes
+// commands on $XDG_RUNTIME_DIR/pyusic/control.sock. The widget hides itself
+// when pyusic is not running or nothing is loaded.
 //
 //   left click    open the player popup
 //   middle click  play / pause
-//   right click   open ytplay
+//   right click   open pyusic
 //   wheel         previous / next track
 BarWidget {
   id: root
-  moduleName: "pyus.ytplay"
+  moduleName: "pyus.pyusic"
 
-  readonly property string runDir: (Quickshell.env("XDG_RUNTIME_DIR") || "/tmp") + "/ytplay"
+  readonly property string runDir: (Quickshell.env("XDG_RUNTIME_DIR") || "/tmp") + "/pyusic"
   property var st: ({ running: false, active: false })
   property real nowSec: Date.now() / 1000
   property bool popupOpen: false
 
-  // ytplay rewrites its status every few seconds; one that stopped doing so was killed.
+  // pyusic rewrites its status every few seconds; one that stopped doing so was killed.
   readonly property bool fresh: !st.ts || (nowSec - st.ts) < 15
   readonly property bool shown: !!st.running && !!st.active && fresh
   readonly property bool isPlaying: !!st.playing
@@ -49,7 +49,7 @@ BarWidget {
     return m + ":" + (s < 10 ? "0" : "") + s
   }
 
-  // ---- talking to ytplay ------------------------------------------------
+  // ---- talking to pyusic ------------------------------------------------
 
   // One long-lived connection: no process spawned per click or wheel notch.
   Socket {
@@ -58,7 +58,7 @@ BarWidget {
     connected: false
   }
 
-  // (Re)connect whenever ytplay is up and the link is not.
+  // (Re)connect whenever pyusic is up and the link is not.
   Timer {
     interval: 1000
     running: root.shown
@@ -206,7 +206,7 @@ BarWidget {
 
     onClicked: function(mouse) {
       if (mouse.button === Qt.MiddleButton) root.send("toggle")
-      else if (mouse.button === Qt.RightButton) root.bar.run("omarchy-launch-or-focus-tui ytplay")
+      else if (mouse.button === Qt.RightButton) root.bar.run("omarchy-launch-or-focus-tui pyusic")
       else root.popupOpen = !root.popupOpen
     }
     onWheel: function(wheel) {

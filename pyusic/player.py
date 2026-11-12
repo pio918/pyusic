@@ -26,7 +26,7 @@ class Player:
         self._writer: asyncio.StreamWriter | None = None
         self._task: asyncio.Task | None = None
         runtime = os.environ.get("XDG_RUNTIME_DIR") or "/tmp"
-        self.sock = Path(runtime) / f"ytplay-{os.getpid()}.sock"
+        self.sock = Path(runtime) / f"pyusic-{os.getpid()}.sock"
 
     async def start(self) -> None:
         if not shutil.which("mpv"):
@@ -35,7 +35,7 @@ class Player:
             "mpv", "--idle=yes", "--no-video", "--no-terminal", "--force-window=no",
             "--ytdl-format=bestaudio/best", "--audio-display=no", "--cache=yes",
             "--demuxer-max-bytes=50MiB", f"--volume={self.volume}",
-            "--force-media-title=ytplay", f"--input-ipc-server={self.sock}",
+            "--force-media-title=pyusic", f"--input-ipc-server={self.sock}",
         ]
         if Path(MPRIS).exists():  # enables media keys / playerctl
             args.append(f"--script={MPRIS}")

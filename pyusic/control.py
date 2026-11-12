@@ -1,8 +1,8 @@
 """Remote control + status for desktop integrations (bar widgets, keybindings).
 
-* status file   $XDG_RUNTIME_DIR/ytplay/status.json   — what is playing, updated live
-* cover image   $XDG_RUNTIME_DIR/ytplay/cover-<n>.jpg — current cover (n = status.cover)
-* control sock  $XDG_RUNTIME_DIR/ytplay/control.sock   — one command per line
+* status file   $XDG_RUNTIME_DIR/pyusic/status.json   — what is playing, updated live
+* cover image   $XDG_RUNTIME_DIR/pyusic/cover-<n>.jpg — current cover (n = status.cover)
+* control sock  $XDG_RUNTIME_DIR/pyusic/control.sock   — one command per line
 
 Commands: toggle play pause next prev prevtrack seek <±sec> seekto <sec> volume <±n> volumeto <n>
           mute shuffle repeat
@@ -20,7 +20,7 @@ from typing import Awaitable, Callable
 
 from PIL import Image
 
-RUN_DIR = Path(os.environ.get("XDG_RUNTIME_DIR") or f"/tmp/ytplay-{os.getuid()}") / "ytplay"
+RUN_DIR = Path(os.environ.get("XDG_RUNTIME_DIR") or f"/tmp/pyusic-{os.getuid()}") / "pyusic"
 STATUS = RUN_DIR / "status.json"
 SOCK = RUN_DIR / "control.sock"
 
@@ -96,7 +96,7 @@ class Control:
 
 
 def send(args: list[str]) -> int:
-    """`ytplay ctl <command…>` — returns a shell exit code."""
+    """`pyusic ctl <command…>` — returns a shell exit code."""
     if not args:
         print(__doc__)
         return 2
@@ -107,7 +107,7 @@ def send(args: list[str]) -> int:
             s.sendall((" ".join(args) + "\n").encode())
             reply = s.recv(256).decode().strip()
     except OSError:
-        print("ytplay is not running", file=sys.stderr)
+        print("pyusic is not running", file=sys.stderr)
         return 1
     if reply != "ok":
         print(reply, file=sys.stderr)
