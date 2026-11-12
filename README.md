@@ -13,6 +13,8 @@ A friendly terminal music player for YouTube playlists, with real cover art.
 
 Tested on Arch/Omarchy with the `foot` terminal (sixel).
 
+![pyusic](docs/panel.png)
+
 ## Install
 
 Requires `python3`, `mpv`, `yt-dlp`, `ffmpeg` (and `socat` for the bar widget's fallback path).
