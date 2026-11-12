@@ -8,6 +8,8 @@ import shutil
 from pathlib import Path
 from typing import Callable
 
+from .viz import MPV_CLIENT, die_with_parent
+
 MPRIS = "/usr/lib/mpv-mpris/mpris.so"
 PROPS = ["time-pos", "duration", "pause", "volume", "mute"]
 
@@ -36,12 +38,14 @@ class Player:
             "--ytdl-format=bestaudio/best", "--audio-display=no", "--cache=yes",
             "--demuxer-max-bytes=50MiB", f"--volume={self.volume}",
             "--force-media-title=pyusic", f"--input-ipc-server={self.sock}",
+            f"--audio-client-name={MPV_CLIENT}",  # a stable name, so the visualizer can find our audio
         ]
         if Path(MPRIS).exists():  # enables media keys / playerctl
             args.append(f"--script={MPRIS}")
         self.proc = await asyncio.create_subprocess_exec(
             *args, stdin=asyncio.subprocess.DEVNULL,
             stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL,
+            preexec_fn=die_with_parent,
         )
         reader = None
         for _ in range(60):

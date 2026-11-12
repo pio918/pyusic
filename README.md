@@ -8,6 +8,7 @@ A friendly terminal music player for YouTube playlists, with real cover art.
 - Mouse-friendly: clickable controls, draggable progress and volume bars.
 - Download a playlist as a folder of tagged `m4a` files, or as a zip. Downloaded tracks play offline automatically.
 - Add any local music folder as a playlist.
+- Audio visualizer (spectrum, braille, mirror, oscilloscope, stereo VU) in 5 colour schemes, fed only by pyusic's own audio.
 - Optional Omarchy bar widget with now-playing, a player popup and wheel/click controls.
 
 Tested on Arch/Omarchy with the `foot` terminal (sixel).
@@ -15,6 +16,7 @@ Tested on Arch/Omarchy with the `foot` terminal (sixel).
 ## Install
 
 Requires `python3`, `mpv`, `yt-dlp`, `ffmpeg` (and `socat` for the bar widget's fallback path).
+The visualizer needs PipeWire's `pw-cat` and `pw-link` (without them pyusic works, just without it).
 
 ```sh
 git clone <this repo> && cd pyusic
@@ -31,6 +33,8 @@ pyusic
 | `←` `→` | seek 5 s (shift: 30 s) |
 | `+` `-` `m` | volume / mute |
 | `s` `r` | shuffle / repeat (off → all → one) |
+| `v` `c` | visualizer: next style / next colour scheme |
+| `[` `]` | visualizer sensitivity |
 | `a` | add a playlist URL or a local folder |
 | `g` | search YouTube |
 | `/` | filter the track list |
@@ -39,6 +43,16 @@ pyusic
 | `?` | help |
 
 `pyusic <playlist-url>` adds and opens a playlist straight away.
+
+## Visualizer
+
+Styles (`v`): `bars` (with falling peak caps), `thin` (braille, one dot per bar), `mirror`, `wave` (oscilloscope), `vu` (stereo meters), `off`.
+Colours (`c`): `theme` (follows your Omarchy accent), `rainbow`, `fire`, `ice`, `mono`. `[` / `]` change the sensitivity.
+Your choices are saved.
+
+How it works: pyusic opens a PipeWire capture stream and links only mpv's output to it, so it sees pyusic's audio and nothing else
+(the sound still goes to your speakers). Each frame it runs an FFT on the last 2048 samples, groups the result into log-spaced
+frequency bands (bass on the left, treble on the right) and draws one bar per band. An automatic gain keeps it readable at any volume.
 
 ## Data
 

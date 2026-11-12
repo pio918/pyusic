@@ -40,6 +40,7 @@ try:  # sixel only has 256 colours: dither them, otherwise gradients band badly
 except Exception:  # library layout changed: fall back to its default quality
     pass
 
+from . import viz
 from .control import Control, send as ctl_send
 from .player import Player, PlayerError
 from .youtube import (MUSIC_ROOT, Downloader, clean, is_local_path, make_zip, offline_index, safe_name, Store, Track, YtError, fetch_playlist, get_thumbnail, search)
@@ -51,6 +52,7 @@ DEFAULT_PALETTE = {
     "background": "#1e1e2e", "dark_background": "#181825", "darker_background": "#11111b",
     "lighter_background": "#313244", "foreground": "#cdd6f4", "dark_foreground": "#7f849c",
     "red": "#f38ba8", "yellow": "#f9e2af", "green": "#a6e3a1", "magenta": "#f5c2e7",
+    "cyan": "#94e2d5", "blue": "#89b4fa",
 }
 
 
@@ -156,6 +158,46 @@ class Slider(Static):
             event.stop()
 
 
+class Visualizer(Static):
+    """Spectrum / waveform / VU display fed by viz.Analyzer. The frame is built once per tick."""
+
+    ALLOW_SELECT = False
+
+    def __init__(self, **kw) -> None:
+        super().__init__(**kw)
+        self.analyzer: viz.Analyzer | None = None
+        self.mode, self.scheme, self.gain = "bars", "theme", 1.0
+        self._lines: list[Text] = []
+        self._quiet = 0
+
+    def advance(self) -> bool:
+        """Compute the next frame. Returns False when nothing changed (silence), to save redraws."""
+        a, (w, h), m = self.analyzer, self.size, self.mode
+        if a is None or w < 6 or h < 1 or m == "off":
+            return False
+        if m in ("bars", "mirror"):
+            bars, peaks = a.update_spectrum(max(4, (w + 1) // 3), self.gain)
+            draw = viz.draw_bars if m == "bars" else viz.draw_mirror
+            lines, energy = draw(bars, peaks, w, h, self.scheme, P), float(peaks.max())
+        elif m == "thin":
+            bars, peaks = a.update_spectrum(w * 2, self.gain)
+            lines, energy = viz.draw_thin(bars, peaks, w, h, self.scheme, P), float(peaks.max())
+        elif m == "wave":
+            s = a.wave(w * 2, self.gain)
+            lines, energy = viz.draw_wave(s, w, h, self.scheme, P), float(abs(s).max())
+        else:  # vu
+            lv = a.update_vu(self.gain)
+            lines, energy = viz.draw_vu(lv, w, h, self.scheme, P), max(lv[2], lv[3])
+        self._quiet = self._quiet + 1 if energy < 0.02 else 0
+        if self._quiet > 3:        # silent for a few frames: the last frame is already empty
+            return False
+        self._lines = lines
+        return True
+
+    def render(self) -> Text:
+        return Text("\n").join(self._lines) if self._lines else Text("")
+
+
 class NowPanel(Vertical):
     def on_resize(self) -> None:
         self.app.call_after_refresh(self.app.fit_art)
@@ -255,6 +297,7 @@ HELP = """\
   ← →          seek 5s   (shift: 30s)
   + -          volume      m  mute
   s  r         shuffle / repeat (off → all → one)
+  v  c         visualizer: next style / next colors     [ ]  sensitivity
 
 [b]Library[/b]
   a            add a YouTube playlist URL, or a local music folder
@@ -320,6 +363,8 @@ Slider { height: 1; width: 100%; }
 #toggles .chip { color: $yp-dim; }
 #toggles .chip.-on { color: $yp-accent; background: $yp-sel; text-style: bold; }
 #volume { margin-top: 1; }
+#viz { height: 7; width: 100%; margin-top: 1; }
+#viz.-off { display: none; }
 Footer { background: $yp-bg; }
 Footer .footer-key--key { color: $yp-accent; background: $yp-bg; }
 Footer .footer-key--description { color: $yp-dim; background: $yp-bg; }
@@ -350,6 +395,10 @@ class Pyusic(App):
         Binding("m", "mute", show=False),
         Binding("s", "shuffle", "Shuffle"),
         Binding("r", "repeat", "Repeat"),
+        Binding("v", "viz_mode", "Visualizer"),
+        Binding("c", "viz_color", show=False),
+        Binding("left_square_bracket", "viz_gain(-0.1)", show=False),
+        Binding("right_square_bracket", "viz_gain(0.1)", show=False),
         Binding("a", "add", "Add playlist"),
         Binding("g", "search", "Search"),
         Binding("slash", "filter", "Filter"),
@@ -427,6 +476,7 @@ class Pyusic(App):
         self.repeat = self.store.settings["repeat"]
         self._shown_sec = -1
         self.art_src = None
+        self.analyzer: viz.Analyzer | None = None
         self.errors_in_a_row = 0
         self.cover_rev = 0
         self.control = Control(self.remote_command)
@@ -459,6 +509,7 @@ class Pyusic(App):
                     yield Ctl("shuffle", "shuffle", id="shuffle", classes="chip")
                     yield Ctl("repeat", "repeat", id="repeat", classes="chip")
                 yield Slider(id="volume")
+                yield Visualizer(id="viz")
         yield Footer()
 
     async def on_mount(self) -> None:
@@ -473,7 +524,13 @@ class Pyusic(App):
         self.query_one("#sidebar").border_title = "playlists"
         self.query_one("#now").border_title = "now playing"
         self.query_one("#art").styles.visibility = "visible"
+        vz = self.query_one("#viz", Visualizer)
+        vz.mode = self.store.settings.get("viz_mode", "bars") if self.store.settings.get("viz_mode") in viz.MODES else "bars"
+        vz.scheme = self.store.settings.get("viz_color", "theme") if self.store.settings.get("viz_color") in viz.COLORS else "theme"
+        vz.gain = float(self.store.settings.get("viz_gain", 1.0))
+        vz.set_class(vz.mode == "off", "-off")
         self.offline = offline_index()
+        await self.start_visualizer()
         try:
             await self.control.start()
             self.set_interval(4, self.control.heartbeat)
@@ -496,6 +553,8 @@ class Pyusic(App):
     async def on_unmount(self) -> None:
         self.store.settings.update(volume=int(self.volume), shuffle=self.shuffle, repeat=self.repeat)
         self.store.save()
+        if self.analyzer:
+            await self.analyzer.close()
         await self.control.close()
         await self.player.close()
 
@@ -505,7 +564,8 @@ class Pyusic(App):
     def fit_art(self) -> None:
         """Largest square (in pixels, whatever the font's cell shape) that fits the panel."""
         now = self.query_one("#now")
-        w, avail = now.content_size.width, now.content_size.height - 13
+        viz_rows = 0 if self.query_one("#viz").has_class("-off") else 8
+        w, avail = now.content_size.width, now.content_size.height - 13 - viz_rows
         if w < 6:
             return
         try:
@@ -1011,6 +1071,49 @@ class Pyusic(App):
                 await self.player.cmd("seek", f * self.duration, "absolute")
         elif e.slider.id == "volume":
             await self.player.cmd("set_property", "volume", round(f * 100))
+
+    # ----------------------------------------------------------------- visualizer
+
+    async def start_visualizer(self) -> None:
+        self.analyzer = viz.Analyzer()
+        if not await self.analyzer.start():
+            self.notify(f"Visualizer unavailable: {self.analyzer.error}", severity="warning", timeout=8)
+            self.analyzer = None
+        self.query_one("#viz", Visualizer).analyzer = self.analyzer
+        self.set_interval(1 / 25, self.viz_tick)
+
+    def viz_tick(self) -> None:
+        if self.analyzer is None:
+            return
+        self.analyzer.want_link = self.current is not None
+        vz = self.query_one("#viz", Visualizer)
+        if vz.advance():
+            vz.refresh()
+
+    def _viz_apply(self, message: str) -> None:
+        vz = self.query_one("#viz", Visualizer)
+        vz.set_class(vz.mode == "off", "-off")
+        vz._quiet, vz._lines = 0, []
+        vz.refresh()
+        self.store.settings.update(viz_mode=vz.mode, viz_color=vz.scheme, viz_gain=round(vz.gain, 2))
+        self.store.save()
+        self.call_after_refresh(self.fit_art)
+        self.notify(message, timeout=1.5)
+
+    def action_viz_mode(self) -> None:
+        vz = self.query_one("#viz", Visualizer)
+        vz.mode = viz.MODES[(viz.MODES.index(vz.mode) + 1) % len(viz.MODES)]
+        self._viz_apply(f"visualizer: {vz.mode}")
+
+    def action_viz_color(self) -> None:
+        vz = self.query_one("#viz", Visualizer)
+        vz.scheme = viz.COLORS[(viz.COLORS.index(vz.scheme) + 1) % len(viz.COLORS)]
+        self._viz_apply(f"colors: {vz.scheme}")
+
+    def action_viz_gain(self, delta: float) -> None:
+        vz = self.query_one("#viz", Visualizer)
+        vz.gain = max(0.3, min(3.0, vz.gain + delta))
+        self._viz_apply(f"sensitivity: {vz.gain:.1f}")
 
     # ----------------------------------------------------------------- desktop integration
 

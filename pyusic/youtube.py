@@ -263,7 +263,8 @@ class Store:
         (CACHE_DIR / "thumbs").mkdir(parents=True, exist_ok=True)
         self.file = CONFIG_DIR / "library.json"
         self.playlists: list[dict] = []
-        self.settings: dict = {"volume": 70, "shuffle": False, "repeat": "off"}
+        self.settings: dict = {"volume": 70, "shuffle": False, "repeat": "off",
+                               "viz_mode": "bars", "viz_color": "theme", "viz_gain": 1.0}
         try:
             data = json.loads(self.file.read_text())
             self.playlists = data.get("playlists", [])
